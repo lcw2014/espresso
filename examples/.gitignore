@@ -1,2 +1,9 @@
 !*/*.sh
 !*/*.md
+*/data/c*
+*/data/C*
+*/data/d*
+*/data/l*
+*/data/t*
+*/data/w*
+*/exp
