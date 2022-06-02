@@ -1,3 +1,4 @@
 kaldi
-openfst*
+openfst
+openfst-1.7.5
 pychain

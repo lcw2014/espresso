@@ -1,5 +1,5 @@
 KALDI =
-PYTHON_DIR = ~/anaconda3/bin
+PYTHON_DIR = ../../../venv/bin
 
 CXX ?= g++
 

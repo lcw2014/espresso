@@ -211,15 +211,12 @@ class SpeechTransformerEncoderModel(FairseqEncoderModel):
         chunk_left_context=0,
         training_stage=True,
     ):
-        return SpeechChunkTransformerEncoder(
+        return SpeechTransformerModel(
             args,
             conv_layers_before=conv_layers_before,
             input_size=input_size,
             transformer_context=transformer_context,
-            num_targets=num_targets,
-            chunk_width=chunk_width,
-            chunk_left_context=chunk_left_context,
-            training_stage=training_stage,
+            num_targets=num_targets
         )
 
     def output_lengths(self, in_lengths):
@@ -227,7 +224,7 @@ class SpeechTransformerEncoderModel(FairseqEncoderModel):
 
     def get_normalized_probs(self, net_output, log_probs, sample=None):
         """Get normalized probabilities (or log probs) from a net's output."""
-        encoder_out = net_output.encoder_out
+        encoder_out = net_output["encoder_out"][0]
         if torch.is_tensor(encoder_out):
             logits = encoder_out.float()
             if log_probs:
@@ -423,6 +420,90 @@ class SpeechChunkTransformerEncoder(SpeechTransformerEncoder):
             "src_lengths": new_src_lengths,  # B x 1
         }
 
+class SpeechTransformerModel(SpeechTransformerEncoder):
+    """Transformer encoder for speech (possibly chunk) data."""
+
+    def __init__(
+        self,
+        args,
+        conv_layers_before=None,
+        input_size=83,
+        transformer_context=None,
+        num_targets=None,
+    ):
+        super().__init__(
+            args,
+            conv_layers_before=conv_layers_before,
+            input_size=input_size,
+            transformer_context=transformer_context,
+        )
+
+        # only for encoder-only model
+        self.fc_out = (
+            Linear(args.encoder_embed_dim, num_targets)
+            if num_targets is not None
+            else None
+        )
+
+    def forward(
+        self,
+        src_tokens,
+        src_lengths,
+        return_all_hiddens: bool = False,
+    ):
+        """
+        Args:
+            src_tokens (LongTensor): tokens in the source language of shape
+                `(batch, src_len)`
+            src_lengths (LongTensor): lengths of each source sentence of
+                shape `(batch)`
+            return_all_hiddens (bool, optional): also return all of the
+                intermediate hidden states (default: False).
+
+        Returns:
+            dict:
+                - **encoder_out** (Tensor): the last encoder layer's output of
+                  shape `(src_len, batch, embed_dim)`
+                - **encoder_padding_mask** (ByteTensor): the positions of
+                  padding elements of shape `(batch, src_len)`
+                - **encoder_embedding** (Tensor): the (scaled) embedding lookup
+                  of shape `(batch, src_len, embed_dim)`
+                - **encoder_states** (List[Tensor]): all intermediate
+                  hidden states of shape `(src_len, batch, embed_dim)`.
+                  Only populated if *return_all_hiddens* is True.
+        """
+        out = super().forward(
+            src_tokens, src_lengths, return_all_hiddens=return_all_hiddens
+        )
+        x, x_lengths = out["encoder_out"][0], out["src_lengths"][0]
+
+        # # determine which output frame to select for loss evaluation/test, assuming
+        # # all examples in a batch are of the same length for chunk-wise training/test
+        # if self.out_chunk_end is not None and (
+        #     self.training or not self.training_stage
+        # ):
+        #     x = x[self.out_chunk_begin : self.out_chunk_end]  # T x B x C -> W x B x C
+        #     x_lengths = x_lengths.fill_(x.size(0))
+
+        if self.fc_out is not None:
+            x = self.fc_out(x)  # T x B x C -> T x B x V
+
+        # The Pytorch Mobile lite interpreter does not supports returning NamedTuple in
+        # `foward` so we use a dictionary instead.
+        # TorchScript does not support mixed values so the values are all lists.
+        # The empty list is equivalent to None.
+        return {
+            "encoder_out": [x],  # T x B x C
+            "encoder_padding_mask": [
+                out["encoder_padding_mask"][0].transpose(0, 1)
+            ]
+            if out["encoder_padding_mask"]
+            else [],  # T x B
+            "encoder_embedding": out["encoder_embedding"],  # None
+            "encoder_states": out["encoder_states"],  # List[T x B x C]
+            "src_tokens": out["src_tokens"],  # None
+            "src_lengths": [x_lengths],  # B
+        }
 
 @register_model_architecture(
     "speech_transformer_encoder_model", "speech_transformer_encoder_model"
@@ -443,7 +524,7 @@ def base_architecture(args):
         "encoder_conv_strides",
         "[(1, 1), (2, 2), (1, 1), (2, 2)]",
     )
-    args.encoder_embed_dim = getattr(args, "encoder_embed_dim", 256)
+    args.encoder_embed_dim = getattr(args, "encoder_embed_dim", 512)
     args.encoder_ffn_embed_dim = getattr(args, "encoder_ffn_embed_dim", 1024)
     args.encoder_layers = getattr(args, "encoder_layers", 12)
     args.encoder_attention_heads = getattr(args, "encoder_attention_heads", 4)
