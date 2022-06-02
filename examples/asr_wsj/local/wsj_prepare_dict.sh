@@ -1,1 +1,0 @@
-../../../espresso/tools/kaldi/egs/wsj/s5/local/wsj_prepare_dict.sh

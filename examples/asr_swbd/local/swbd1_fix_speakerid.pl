@@ -1,1 +1,0 @@
-../../../espresso/tools/kaldi/egs/swbd/s5c/local/swbd1_fix_speakerid.pl

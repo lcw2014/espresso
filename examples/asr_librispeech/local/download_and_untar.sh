@@ -1,1 +1,0 @@
-../../../espresso/tools/kaldi/egs/librispeech/s5/local/download_and_untar.sh

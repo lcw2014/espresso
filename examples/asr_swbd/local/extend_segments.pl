@@ -1,1 +1,0 @@
-../../../espresso/tools/kaldi/egs/swbd/s5c/local/extend_segments.pl
