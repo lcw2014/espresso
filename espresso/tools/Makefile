@@ -1,4 +1,4 @@
-KALDI =
+KALDI = ../../../kaldi
 PYTHON_DIR = ../../../venv/bin
 
 CXX ?= g++
@@ -73,7 +73,7 @@ openfst-$(OPENFST_VERSION).tar.gz:
 
 .PHONY: pychain
 pychain:
-	test -d pychain || git clone https://github.com/YiwenShaoStephen/pychain.git
+	test -d pychain || git clone https://github.com/lcw2014/pychain.git
 	export OPENFST_PATH=`pwd`/openfst && \
 	export LD_LIBRARY_PATH=`pwd`/openfst/lib:$$LD_LIBRARY_PATH && \
 	export PATH=$(PYTHON_DIR):$$PATH && \
